@@ -1,0 +1,1 @@
+# shopizer-inventory-xml
