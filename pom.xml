@@ -15,7 +15,7 @@
   <properties>
   	
   		<sm-shop.version>2.0.3-SNAPSHOT</sm-shop.version>
-		<sm-core-model.version>2.0.3-SNAPSHOT</sm-core-model.version>
+		<sm-core-model.version>2.11.0</sm-core-model.version>
 		<jackson-version>1.9.13</jackson-version>
 		<org.springframework-version>3.1.0.RELEASE</org.springframework-version>
 		<org.springframework-security-version>3.1.4.RELEASE</org.springframework-security-version>
