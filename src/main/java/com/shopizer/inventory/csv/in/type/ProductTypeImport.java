@@ -1,10 +1,11 @@
-package com.shopizer.inventory.csv.in.manufacturer;
+package com.shopizer.inventory.csv.in.type;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -22,14 +23,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.codec.Base64;
 import org.springframework.web.client.RestTemplate;
 
-import com.salesmanager.shop.model.catalog.manufacturer.ManufacturerDescription;
-import com.salesmanager.shop.model.catalog.manufacturer.PersistableManufacturer;
+import com.salesmanager.shop.model.catalog.product.type.PersistableProductType;
+import com.salesmanager.shop.model.catalog.product.type.ProductTypeDescription;
 
-public class ManufacturerImport {
+public class ProductTypeImport {
 
-
-	private String FILE_NAME =   "/Users/carlsamson/Documents/dev/workspaces/shopizer-inventory-xls/shopizer-inventory-csv/src/main/resources/collection-loader.csv";
-	private String endPoint = "http://localhost:8080/api/v1/private/manufacturer?store=";
+	private String FILE_NAME =   "/Users/carlsamson/Documents/dev/workspaces/shopizer-inventory-xls/shopizer-inventory-csv/src/main/resources/types-loader.csv";
+	private String endPoint = "http://localhost:8080/api/v1/private/products/type?store=";
 	
 	private static final String ADMIN_NAME = "admin@shopizer.com";
 	private static final String ADMIN_PASSWORD = "password";
@@ -38,11 +38,10 @@ public class ManufacturerImport {
 	
 	public static void main(String[] args) {
 		
-		ManufacturerImport manufacturerImport = new ManufacturerImport();
+		ProductTypeImport manufacturerImport = new ProductTypeImport();
 		try {
 			manufacturerImport.process();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
@@ -60,75 +59,87 @@ public class ManufacturerImport {
 		
 		@SuppressWarnings("resource")
 		CSVParser parser = new CSVParser(in,format);
-
-		HttpHeaders httpHeader = getHeader();
 		
 		Map<String, Integer> headerMap = parser.getHeaderMap();
+
+		HttpHeaders httpHeader = getHeader();
 
 		int i = 0;
 		
 		for(CSVRecord record : parser){
 
-			if(StringUtils.isBlank(record.get("code"))) {
+			if(StringUtils.isBlank(record.get("type_en"))) {
 				continue;
 			}
-
-
 			
-			//core properties
-			PersistableManufacturer manufacturer = new PersistableManufacturer();
-			manufacturer.setCode(record.get("code"));
-			manufacturer.setId(null);
+			/**
+			 * temp code generate friendly code
+			 */
+			//System.out.println(this.codeGen(record.get("type_en")));
+			//continue;
 
-			List<ManufacturerDescription> descriptions = new ArrayList<ManufacturerDescription>();
+			PersistableProductType type = new PersistableProductType();
+			type.setCode(record.get("code"));
+			type.setAllowAddToCart(true);
+			type.setVisible(true);
+			type.setId(null);
+
+
+			List<ProductTypeDescription> descriptions = new ArrayList<ProductTypeDescription>();
 			
 			//add english description
-			ManufacturerDescription description = new ManufacturerDescription();
+			ProductTypeDescription description = new ProductTypeDescription();
 			description.setLanguage("en");
-			description.setName(record.get("name_en"));
-			description.setDescription(description.getName());	
+			description.setName(record.get("type_en"));
+			description.setDescription(record.get("type_en"));	
+			description.setId(null);
 
+			
 			descriptions.add(description);
 			
 			//add other description
-			description = new ManufacturerDescription();
-			if(headerMap.containsKey("name_fr")) {
+			description = new ProductTypeDescription();
+			if(headerMap.containsKey("type_fr")) {
 				description.setId(null);
 				description.setLanguage("fr");
-				description.setName(record.get("name_fr"));
-				description.setDescription(record.get("name_fr"));	
+				description.setName(record.get("type_fr"));
+				description.setDescription(record.get("type_fr"));	
 			} else {
 				description.setId(null);
 				description.setLanguage("fr");
-				description.setName(record.get("name_en"));
-				description.setDescription(record.get("name_en"));	
+				description.setName(record.get("type_en"));
+				description.setDescription(record.get("type_en"));	
 			}
 			
 			descriptions.add(description);
-			manufacturer.setDescriptions(descriptions);
+			
+			type.setDescriptions(descriptions);
 			
 			ObjectWriter writer = new ObjectMapper().writer().withDefaultPrettyPrinter();
-			String json = writer.writeValueAsString(manufacturer);
+			String json = writer.writeValueAsString(type);
 			
 			System.out.println(json);
 			
 			
-			HttpEntity<String> entity = new HttpEntity<String>(json, httpHeader);
+  		    HttpEntity<String> entity = new HttpEntity<String>(json, httpHeader);
 
 			//post to create category web service
-			//ResponseEntity response = restTemplate.postForEntity("http://beta.exotikamobilia.ca/sm-shop/services/private/DEFAULT/manufacturer", entity, PersistableManufacturer.class);
-			//ResponseEntity response = restTemplate.postForEntity("http://www.exotikmobilier.com/services/private/DEFAULT/manufacturer", entity, PersistableManufacturer.class);
-			ResponseEntity response = restTemplate.postForEntity(endPoint + MERCHANT, entity, PersistableManufacturer.class);
+			@SuppressWarnings("rawtypes")
+			ResponseEntity response = restTemplate.postForEntity(endPoint + MERCHANT, entity, PersistableProductType.class);
+			
 			i++;
+			System.out.println("--------------------- [" + response.getStatusCodeValue() + "]" + i);
 
-			System.out.println("--------------------- " + i);
+			
+
+			
 		}
 		
 		
 	
      
 		System.out.println("------------------------------------");
-		System.out.println("Manufacturer import done");
+		System.out.println("ProductType import done");
 		System.out.println("------------------------------------");
 		
 	}
@@ -144,6 +155,18 @@ public class ManufacturerImport {
 		byte[] encodedAuthorisation = Base64.encode(authorisation.getBytes());
 		headers.add("Authorization", "Basic " + new String(encodedAuthorisation));
 		return headers;
+	}
+	
+	public String codeGen(String name) {
+		name = name.toLowerCase();
+		name = name.replace("  ", " ");
+		
+		//remove accents
+		name = Normalizer.normalize(name, Normalizer.Form.NFD);
+		name = name.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+
+		name = name.replace(" ", "-");
+		return name;
 	}
 
 }

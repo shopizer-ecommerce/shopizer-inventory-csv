@@ -23,6 +23,7 @@ import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.StringUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.ObjectWriter;
+import org.json.simple.JSONObject;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -35,8 +36,7 @@ import com.salesmanager.shop.model.catalog.product.PersistableProduct;
 import com.salesmanager.shop.model.catalog.product.PersistableProductPrice;
 import com.salesmanager.shop.model.catalog.product.ProductDescription;
 import com.salesmanager.shop.model.catalog.product.ProductSpecification;
-import com.salesmanager.shop.store.security.AuthenticationRequest;
-import com.salesmanager.shop.store.security.AuthenticationResponse;
+
 
 
 public class ProductImport {
@@ -119,17 +119,7 @@ public class ProductImport {
 		RestTemplate restTemplate = new RestTemplate();
 		
 		CSVFormat format = CSVFormat.EXCEL.withHeader().withDelimiter(',');
-		
-/*		FileInputStream is = new FileInputStream(FILE_NAME);
-		InputStreamReader isr = new InputStreamReader(is,StandardCharsets.UTF_8);
-		int data = isr.read();
-	    while(data != -1) {
-	        System.out.print((char) data);
-	        data = isr.read();
-	    }*/
-		
-		
-		
+
 		BufferedReader in = new BufferedReader(
 				   new InputStreamReader(
 		                      new FileInputStream(FILE_NAME), StandardCharsets.UTF_8));
@@ -360,17 +350,29 @@ public class ProductImport {
 	}
 	
 	
-    protected HttpHeaders getHeader() {
+    protected HttpHeaders getHeader() throws Exception {
     	if (DRY_RUN) return null;
     	if(this.httpHeader != null) {
     		return this.httpHeader;
     	}
     	RestTemplate restTemplate = new RestTemplate();
-        final ResponseEntity<AuthenticationResponse> response = restTemplate.postForEntity(baseUrl +"/api/v1/private/login", new HttpEntity<>(new AuthenticationRequest("admin", "password")),
-                AuthenticationResponse.class);
+    	ObjectMapper objectMapper = new ObjectMapper();
+    	
+    	JSONObject authRequest = new JSONObject();
+    	authRequest.put("username", "admin@shopizer.com");
+    	authRequest.put("password", "password");
+    	
+    	
+    	
+        final ResponseEntity<String> response = restTemplate.postForEntity(baseUrl +"/api/v1/private/login", new HttpEntity<String>(authRequest.toJSONString()),
+                String.class);
+        
+        Map<String, String> map = objectMapper.readValue(response.getBody(), Map.class);
+        
+        
         final HttpHeaders headers = new HttpHeaders();
         headers.setContentType(new MediaType("application", "json", Charset.forName("UTF-8")));
-        headers.add("Authorization", "Bearer " + response.getBody().getToken());
+        headers.add("Authorization", "Bearer " + map.get("token"));
         this.httpHeader = headers;
         return this.httpHeader;
     }

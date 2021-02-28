@@ -23,9 +23,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.codec.Base64;
 import org.springframework.web.client.RestTemplate;
 
-import com.salesmanager.web.entity.catalog.category.Category;
-import com.salesmanager.web.entity.catalog.category.CategoryDescription;
-import com.salesmanager.web.entity.catalog.category.PersistableCategory;
+import com.salesmanager.shop.model.catalog.category.Category;
+import com.salesmanager.shop.model.catalog.category.CategoryDescription;
+import com.salesmanager.shop.model.catalog.category.PersistableCategory;
+
+
 
 public class CategoryImport {
 	
