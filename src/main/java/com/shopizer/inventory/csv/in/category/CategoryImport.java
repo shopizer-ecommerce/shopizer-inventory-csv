@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,9 +32,12 @@ import com.salesmanager.shop.model.catalog.category.PersistableCategory;
 
 public class CategoryImport {
 	
-	private String FILE_NAME = "/Users/carlsamson/Documents/dev/workspaces/shopizer-inventoty-xls/shopizer-inventory-csv/src/main/resources/category-loader.csv";
+	//private String FILE_NAME = "/Users/carlsamson/Documents/dev/workspaces/shopizer-inventoty-xls/shopizer-inventory-csv/src/main/resources/category-loader.csv";
+	private String FILE_NAME =   "/Users/carlsamson/Documents/csti/projects-proposals/rufina/xls/category-loader.csv";
+	private String endPoint = "http://localhost:8080/api/v1/private/category?store=";
 	
-
+	private static final String MERCHANT = "DEFAULT";
+	
 	public static void main(String[] args) {
 		
 		CategoryImport categoryImport = new CategoryImport();
@@ -74,6 +78,9 @@ public class CategoryImport {
 				continue;
 			}
 			
+			//System.out.println(this.codeGen(record.get("code")));
+			//continue;
+
 			
 			System.out.println(record.get("code"));
 			System.out.println(record.get("name_en"));
@@ -101,7 +108,7 @@ public class CategoryImport {
 			description.setName(record.get("name_en"));
 			description.setDescription(description.getName());
 			description.setFriendlyUrl(record.get("friendlyUrl_en"));
-			description.setHighlights(record.get("highlights_en"));
+			//description.setHighlights(record.get("highlights_en"));
 			
 			descriptions.add(description);
 			
@@ -112,7 +119,7 @@ public class CategoryImport {
 			description.setName(record.get("name_fr"));
 			description.setDescription(description.getName());
 			description.setFriendlyUrl(record.get("friendlyUrl_fr"));
-			description.setHighlights(record.get("highlights_fr"));
+			//description.setHighlights(record.get("highlights_fr"));
 			
 			descriptions.add(description);
 			category.setDescriptions(descriptions);
@@ -133,6 +140,7 @@ public class CategoryImport {
 			
 			System.out.println("---------------------");
 			i++;//rows
+
 		}
 		
 		HttpHeaders httpHeader = getHeader();
@@ -151,7 +159,7 @@ public class CategoryImport {
 				HttpEntity<String> entity = new HttpEntity<String>(json, httpHeader);
 	
 				//post to create category web service
-				ResponseEntity response = restTemplate.postForEntity("http://www.exotikmobilier.com/services/private/DEFAULT/category", entity, PersistableCategory.class);
+				ResponseEntity response = restTemplate.postForEntity(endPoint + MERCHANT, entity, PersistableCategory.class);
 				PersistableCategory cat = (PersistableCategory) response.getBody();
 				
 			}
@@ -172,10 +180,22 @@ public class CategoryImport {
 		//MediaType.APPLICATION_JSON //for application/json
 		headers.setContentType(mediaType);
 		//Basic Authentication
-		String authorisation = "admin" + ":" + "Montreal2016!";
+		String authorisation = "admin@shopizer.com" + ":" + "password";
 		byte[] encodedAuthorisation = Base64.encode(authorisation.getBytes());
 		headers.add("Authorization", "Basic " + new String(encodedAuthorisation));
 		return headers;
+	}
+	
+	public String codeGen(String name) {
+		name = name.toLowerCase();
+		name = name.replace("  ", " ");
+		
+		//remove accents
+		name = Normalizer.normalize(name, Normalizer.Form.NFD);
+		name = name.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+
+		name = name.replace(" ", "-");
+		return name;
 	}
 
 }

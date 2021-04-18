@@ -11,11 +11,14 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.StringTokenizer;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -23,11 +26,11 @@ import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.StringUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.map.ObjectWriter;
-import org.json.simple.JSONObject;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.codec.Base64;
 import org.springframework.web.client.RestTemplate;
 
 import com.salesmanager.shop.model.catalog.category.Category;
@@ -36,6 +39,10 @@ import com.salesmanager.shop.model.catalog.product.PersistableProduct;
 import com.salesmanager.shop.model.catalog.product.PersistableProductPrice;
 import com.salesmanager.shop.model.catalog.product.ProductDescription;
 import com.salesmanager.shop.model.catalog.product.ProductSpecification;
+import com.salesmanager.shop.model.catalog.product.attribute.PersistableProductAttribute;
+import com.salesmanager.shop.model.catalog.product.attribute.PersistableProductOption;
+import com.salesmanager.shop.model.catalog.product.attribute.PersistableProductOptionValue;
+import com.salesmanager.shop.model.catalog.product.attribute.ProductOptionValue;
 
 
 
@@ -77,12 +84,12 @@ public class ProductImport {
 	
 	private HttpHeaders httpHeader;
 	
-	//private String baseUrl = "http://ec2-35-182-159-217.ca-central-1.compute.amazonaws.com:8080";
-	private String baseUrl = "http://localhost:8080";
+	private String endPoint = "http://localhost:8080/api/v1/private/product?store=";
 	
+	private static final String MERCHANT = "DEFAULT";
 	private boolean DRY_RUN = false;
 	
-	private final int MAX_COUNT = 21;
+	private final int MAX_COUNT = 100;
 	
 	
 	
@@ -94,9 +101,9 @@ public class ProductImport {
 	/**
 	 * where to find csv							
 	 */
-	//private String FILE_NAME = "/Users/carlsamson/Documents/dev/workspaces/shopizer-tools/tools/src/main/resources/2017-01-25.csv";
+	private String FILE_NAME = "/Users/carlsamson/Documents/csti/projects-proposals/rufina/xls/rufina-product-import-2.csv";
 	//private String FILE_NAME = "/Users/carlsamson/Documents/csti/shopizer/Revamp-2.5/Shopizer-demo/products-import.csv";
-	private String FILE_NAME = "/Users/carlsamson/Documents/csti/projects-proposals/bam/BAM-excel/BAM-import_list_02.csv";
+	//private String FILE_NAME = "/Users/carlsamson/Documents/csti/projects-proposals/bam/BAM-excel/BAM-import_list_02.csv";
 	//private String FILE_NAME = "/Users/carlsamson/Documents/dev/workspaces/shopizer-tools/tools/src/main/resources/BAM-import.csv";
 	
 	private int iterationCount = 1;
@@ -142,17 +149,20 @@ public class ProductImport {
 				continue;
 			} 
 			
-			String barcode = record.get("barcode");
-
-			if(StringUtils.isBlank(barcode)) {
-				barcode = this.alternativeIdentifier(record);
-				if(StringUtils.isBlank(barcode)) {
-					System.out.println("Skipping barcode " + i);
-					i++;
-					continue;
+			
+			String barcode = "";
+			if(record.isSet("barcode")) {
+				barcode = record.get("barcode");
+				if(!StringUtils.isBlank(barcode)) {
+					barcode = this.alternativeIdentifier(record);
+					if(StringUtils.isBlank(barcode)) {
+						System.out.println("Skipping barcode " + i);
+						i++;
+						continue;
+					}
 				}
-
 			}
+			
 			
 			String imp = record.get("import");//import this row ? yes|no
 			System.out.println("Import status [" + imp + "]");
@@ -193,7 +203,6 @@ public class ProductImport {
 				stringQuantity = "1";
 			}
 			int quantity = Integer.parseInt(stringQuantity);
-			
 			price = price.replaceAll(",", ".").trim();
 			
 			BigDecimal productPrice = new BigDecimal(price);
@@ -210,18 +219,17 @@ public class ProductImport {
 			specs.setManufacturer(manufacturer);
 			
 			//sizes are required when loading a product
-			String dimensions = record.get("dimensions");
+			String dimensions = record.get("dimension");
 			
-			String W = convertDimension(record.get("width"),dimensions).toString();
-			String L = convertDimension(record.get("length"),dimensions).toString();
-			String H = convertDimension(record.get("length"),dimensions).toString();
+			String W = convertDimension(record.get("package_width"),dimensions).toString();
+			String L = convertDimension(record.get("package_length"),dimensions).toString();
+			String H = convertDimension(record.get("package_length"),dimensions).toString();
 			
-			specs.setHeight(convertDimension(record.get("height"),dimensions));
-			specs.setWidth(convertDimension(record.get("width"),dimensions));
-			specs.setLength(convertDimension(record.get("length"),dimensions));
-			specs.setWeight(convertWeight(record.get("weight")));
-			//specs.setDimensionUnitOfMeasure(dimensionUnitOfMeasure);
-			
+			specs.setHeight(convertDimension(record.get("package_height"),dimensions));
+			specs.setWidth(convertDimension(record.get("package_width"),dimensions));
+			specs.setLength(convertDimension(record.get("package_length"),dimensions));
+			specs.setWeight(convertWeight(record.get("package_weight")));
+
 			//core properties
 			PersistableProduct product = new PersistableProduct();
 			product.setSku(code);
@@ -235,29 +243,58 @@ public class ProductImport {
 			product.setQuantityOrderMinimum(1);//force to 1 minimum when ordering
 			product.setProductShipeable(true);//all items are shipeable
 			
-			/** images **/
-			String image = record.get("image_name");
-			if(!StringUtils.isBlank(image)) {
+			if(record.isSet("type")) {
+				product.setType(record.get("type"));
+			}
+			
+			if(record.isSet("dimensions")) {
+				String dimensionsOptions = record.get("dimensions");
+				//should be : seperated
 				
-				StringBuilder imageName = new StringBuilder();
-				imageName.append(IMAGE_BASE_DIR).append(image.trim()).append(".jpg");//TODO remove
-				
-				File imgPath = new File(imageName.toString());
-				
-				byte[] bytes = this.extractBytes(imgPath);
-				if(bytes!=null) {
-					PersistableImage persistableImage = new PersistableImage();
+				if(!StringUtils.isBlank(dimensionsOptions)) {
+					PersistableProductOption opt = new PersistableProductOption();
+					opt.setCode("size");
+					List<String> dims = getTokensWithCollection(dimensionsOptions,":");
+					List<PersistableProductAttribute> attributes = new ArrayList<PersistableProductAttribute>();
+					dims.stream().forEach(s -> {
+						PersistableProductAttribute attr = new PersistableProductAttribute();
+
+						attr.setOption(opt);
+						PersistableProductOptionValue optValue = new PersistableProductOptionValue();
+						optValue.setCode(s);
 						
+						attr.setOptionValue(optValue);
 						
-					persistableImage.setBytes(bytes);
-					persistableImage.setName(imgPath.getName());
-		
-					List<PersistableImage> images = new ArrayList<PersistableImage>();
-					images.add(persistableImage);
-						
-					product.setImages(images);
+						attributes.add(attr);
+					});
+					product.setAttributes(attributes);
+
 				}
-				
+			}
+			
+			/** images **/
+			if(record.isSet("image_name")) {
+				String image = record.get("image_name");
+				if(!StringUtils.isBlank(image)) {
+					
+					StringBuilder imageName = new StringBuilder();
+					imageName.append(IMAGE_BASE_DIR).append(image.trim()).append(".jpg");//TODO remove
+					
+					File imgPath = new File(imageName.toString());
+					
+					byte[] bytes = this.extractBytes(imgPath);
+					if(bytes!=null) {
+						PersistableImage persistableImage = new PersistableImage();
+	
+						persistableImage.setBytes(bytes);
+						persistableImage.setName(imgPath.getName());
+			
+						List<PersistableImage> images = new ArrayList<PersistableImage>();
+						images.add(persistableImage);
+							
+						product.setImages(images);
+					}
+				}
 			}
 
 
@@ -291,9 +328,7 @@ public class ProductImport {
 			for(int langLenth=0;langLenth<langs.length;langLenth++) {
 				
 				ProductDescription description = new ProductDescription();
-				
 				String lang = langs[langLenth];
-				
 				if(!record.isSet("pre") || !StringUtils.isBlank(record.get("pre-order"))) {
 					//something specific must be written ?
 				}
@@ -301,9 +336,9 @@ public class ProductImport {
 				
 				description = new ProductDescription();
 				description.setLanguage(lang);
-				description.setTitle(record.get("name_" + lang));
-				description.setName(record.get("name_" + lang));
-				description.setDescription(record.get("description_" + lang));
+				description.setTitle(cleanup(record.get("name_" + lang)));
+				description.setName(cleanup(record.get("name_" + lang)));
+				description.setDescription(cleanup(record.get("description_" + lang)));
 				if(StringUtils.isBlank(description.getName())) {
 					description.setName(description.getDescription());
 				}
@@ -327,7 +362,7 @@ public class ProductImport {
 
 			if(!DRY_RUN) {
 				HttpEntity<String> entity = new HttpEntity<String>(json, httpHeader);
-				ResponseEntity response = restTemplate.postForEntity(baseUrl + "/api/v1/private/product", entity, PersistableProduct.class);
+				ResponseEntity response = restTemplate.postForEntity(endPoint + MERCHANT, entity, PersistableProduct.class);
 				PersistableProduct prod = (PersistableProduct) response.getBody();
 			}
 			
@@ -349,32 +384,29 @@ public class ProductImport {
 		
 	}
 	
+	private String cleanup(String field) {
+		//cleanup unwelcome other charset characters
+		return field.replaceAll("�", "");
+	}
 	
-    protected HttpHeaders getHeader() throws Exception {
-    	if (DRY_RUN) return null;
-    	if(this.httpHeader != null) {
-    		return this.httpHeader;
-    	}
-    	RestTemplate restTemplate = new RestTemplate();
-    	ObjectMapper objectMapper = new ObjectMapper();
-    	
-    	JSONObject authRequest = new JSONObject();
-    	authRequest.put("username", "admin@shopizer.com");
-    	authRequest.put("password", "password");
-    	
-    	
-    	
-        final ResponseEntity<String> response = restTemplate.postForEntity(baseUrl +"/api/v1/private/login", new HttpEntity<String>(authRequest.toJSONString()),
-                String.class);
-        
-        Map<String, String> map = objectMapper.readValue(response.getBody(), Map.class);
-        
-        
-        final HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(new MediaType("application", "json", Charset.forName("UTF-8")));
-        headers.add("Authorization", "Bearer " + map.get("token"));
-        this.httpHeader = headers;
-        return this.httpHeader;
+    
+	private HttpHeaders getHeader(){
+		if (DRY_RUN) return null;
+		HttpHeaders headers = new HttpHeaders();
+		MediaType mediaType = new MediaType("application", "json", Charset.forName("UTF-8"));
+		//MediaType.APPLICATION_JSON //for application/json
+		headers.setContentType(mediaType);
+		//Basic Authentication
+		String authorisation = "admin@shopizer.com" + ":" + "password";
+		byte[] encodedAuthorisation = Base64.encode(authorisation.getBytes());
+		headers.add("Authorization", "Basic " + new String(encodedAuthorisation));
+		return headers;
+	}
+    
+    private ProductOptionValue optValue(String code) {
+    	ProductOptionValue optValue = new ProductOptionValue();
+    	optValue.setCode(code);
+    	return optValue;
     }
 
 	
@@ -525,6 +557,12 @@ public class ProductImport {
 		}
 		
 		return quantity;
+	}
+	
+	private List<String> getTokensWithCollection(String str, String token) {
+	    return Collections.list(new StringTokenizer(str,token)).stream()
+	      .map(t -> (String) t)
+	      .collect(Collectors.toList());
 	}
 	
 	public int minimumQuantity(int quantity) {
