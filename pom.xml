@@ -19,7 +19,7 @@
 		<sm-shop-model.version>2.16.0</sm-shop-model.version>
 		<jackson-version>1.9.13</jackson-version>
 		<org.springframework-version>3.1.0.RELEASE</org.springframework-version>
-		<org.springframework-security-version>3.1.4.RELEASE</org.springframework-security-version>
+		<org.springframework-security-version>5.5.7</org.springframework-security-version>
 		<org.aspectj-version>1.6.10</org.aspectj-version>
 		<org.slf4j-version>1.6.6</org.slf4j-version>
 
