@@ -35,14 +35,16 @@ import org.springframework.web.client.RestTemplate;
 
 import com.salesmanager.shop.model.catalog.category.Category;
 import com.salesmanager.shop.model.catalog.product.PersistableImage;
-import com.salesmanager.shop.model.catalog.product.PersistableProduct;
 import com.salesmanager.shop.model.catalog.product.PersistableProductPrice;
 import com.salesmanager.shop.model.catalog.product.ProductDescription;
-import com.salesmanager.shop.model.catalog.product.ProductSpecification;
 import com.salesmanager.shop.model.catalog.product.attribute.PersistableProductAttribute;
 import com.salesmanager.shop.model.catalog.product.attribute.PersistableProductOption;
 import com.salesmanager.shop.model.catalog.product.attribute.PersistableProductOptionValue;
 import com.salesmanager.shop.model.catalog.product.attribute.ProductOptionValue;
+import com.salesmanager.shop.model.catalog.product.product.PersistableProduct;
+import com.salesmanager.shop.model.catalog.product.product.PersistableProductInventory;
+import com.salesmanager.shop.model.catalog.product.product.ProductSpecification;
+import com.salesmanager.shop.model.catalog.product.product.variant.PersistableProductVariant;
 
 
 
@@ -73,23 +75,27 @@ public class ProductImport {
 	 * position -> placement in listing page (ordering)
 	 * import -> yes | no
 	 * 
-	 * NEED JAVA 1.8
+	 * NEED JAVA 11
+	 */
+	
+	/**
+	 * For Shopizer 3.2.3 +
 	 */
 	
 	/**
 	 * Supported languages
 	 * CSV template must contain name_<language> and description<language>
 	 */
-	private String langs[] = {"en","fr"};
+	private String langs[] = {"en"};
 	
 	private HttpHeaders httpHeader;
 	
-	private String endPoint = "http://localhost:8080/api/v1/private/product?store=";
+	private String endPoint = "http://localhost:8080/api/v2/private/product/inventory?store=";
 	
 	private static final String MERCHANT = "DEFAULT";
-	private boolean DRY_RUN = false;
+	private boolean DRY_RUN = true;
 	
-	private final int MAX_COUNT = 100;
+	private final int MAX_COUNT = 10;
 	
 	
 	
@@ -101,7 +107,7 @@ public class ProductImport {
 	/**
 	 * where to find csv							
 	 */
-	private String FILE_NAME = "/Users/carlsamson/Documents/csti/projects-proposals/rufina/xls/rufina-product-import-2.csv";
+	private String FILE_NAME = "/Users/carlsamson/Documents/dev/mydidas.csv";
 	//private String FILE_NAME = "/Users/carlsamson/Documents/csti/shopizer/Revamp-2.5/Shopizer-demo/products-import.csv";
 	//private String FILE_NAME = "/Users/carlsamson/Documents/csti/projects-proposals/bam/BAM-excel/BAM-import_list_02.csv";
 	//private String FILE_NAME = "/Users/carlsamson/Documents/dev/workspaces/shopizer-tools/tools/src/main/resources/BAM-import.csv";
@@ -163,21 +169,44 @@ public class ProductImport {
 				}
 			}
 			
+			if(record.isSet("import")) {
+				String imp = record.get("import");//import this row ? yes|no
+				System.out.println("Import status [" + imp + "]");
+				
+				if(StringUtils.isBlank(imp) || "no".equals(imp)) {
+					System.out.println("Skipping import " + i);
+					i++;
+					continue;
+				}
+			}
 			
-			String imp = record.get("import");//import this row ? yes|no
-			System.out.println("Import status [" + imp + "]");
+			/*
+			 * get inventory
+			 */
+			PersistableProductVariant variant = null;
 			
-			if(StringUtils.isBlank(imp) || "no".equals(imp)) {
-				System.out.println("Skipping import " + i);
-				i++;
-				continue;
-			} 
+			if(record.isSet("inventory")) {
+				
+				String inventoryString = record.get("inventory");
+				
+				//parse inventory
+				variant = this.variant(inventoryString);
+				code = variant.getSku();
+				
+			}
 			
-
+			
 			code = uniqueSku(code);
 			
 			String categoryCode = record.get("category");
-			String price = record.get("price");
+			String price = null;
+			BigDecimal productPrice = null;
+			if(record.isSet("price")) {
+				price = record.get("price");
+				price = price.replaceAll(",", ".").trim();
+				productPrice = new BigDecimal(price);
+			}
+					
 			
 			String orderString = record.get("position");
 			if(StringUtils.isBlank(orderString)) {
@@ -191,21 +220,31 @@ public class ProductImport {
 				continue;
 			}
 			
-			if(StringUtils.isBlank(price)) {
+			if(StringUtils.isBlank(price) && variant == null) {
 				System.out.println("No price, skipping " + code);
 				continue;
 			} else {
 				//int randomPrice = this.randPrice(150, 300);//when there is no price
 			}
 			
-			String stringQuantity = record.get("quantity");
-			if(StringUtils.isBlank(stringQuantity)) {
-				stringQuantity = "1";
-			}
-			int quantity = Integer.parseInt(stringQuantity);
-			price = price.replaceAll(",", ".").trim();
+			String stringQuantity = null;
+			int quantity = 0;
 			
-			BigDecimal productPrice = new BigDecimal(price);
+			if(record.isSet("quantity")) {
+				stringQuantity = record.get("quantity");
+
+				if(StringUtils.isBlank(stringQuantity)) {
+					stringQuantity = "1";
+				}
+				Integer.parseInt(stringQuantity);
+			}
+			
+			if(variant != null) {
+				quantity = variant.getInventory().getQuantity();
+			}
+			
+
+			
 			
 			Category category = new Category();
 			category.setCode(categoryCode);
@@ -214,21 +253,23 @@ public class ProductImport {
 
 			
 			/** specification **/
-			String manufacturer = record.get("collection");//brand - manufacturer ...
+			String manufacturer = record.get("brand");//brand - manufacturer ...
 			ProductSpecification specs = new ProductSpecification();
 			specs.setManufacturer(manufacturer);
 			
 			//sizes are required when loading a product
-			String dimensions = record.get("dimension");
-			
-			String W = convertDimension(record.get("package_width"),dimensions).toString();
-			String L = convertDimension(record.get("package_length"),dimensions).toString();
-			String H = convertDimension(record.get("package_length"),dimensions).toString();
-			
-			specs.setHeight(convertDimension(record.get("package_height"),dimensions));
-			specs.setWidth(convertDimension(record.get("package_width"),dimensions));
-			specs.setLength(convertDimension(record.get("package_length"),dimensions));
-			specs.setWeight(convertWeight(record.get("package_weight")));
+			if(record.isSet("dimension")) {
+				String dimensions = record.get("dimension");
+				
+				String W = convertDimension(record.get("package_width"),dimensions).toString();
+				String L = convertDimension(record.get("package_length"),dimensions).toString();
+				String H = convertDimension(record.get("package_length"),dimensions).toString();
+				
+				specs.setHeight(convertDimension(record.get("package_height"),dimensions));
+				specs.setWidth(convertDimension(record.get("package_width"),dimensions));
+				specs.setLength(convertDimension(record.get("package_length"),dimensions));
+				specs.setWeight(convertWeight(record.get("package_weight")));
+			}
 
 			//core properties
 			PersistableProduct product = new PersistableProduct();
@@ -298,29 +339,48 @@ public class ProductImport {
 			}
 
 
-		
-			product.setQuantity(quantity);
+			
+			
 			product.setQuantityOrderMaximum(maximumQuantity(quantity));
 			product.setQuantityOrderMinimum(minimumQuantity(quantity));
-
-			PersistableProductPrice persistableProductPrice = new PersistableProductPrice();
-			persistableProductPrice.setDefaultPrice(true);
-
-			persistableProductPrice.setOriginalPrice(productPrice);
 			
-			//apply a discunted price
-			if(record.isSet("deal")) {
-				String discount = record.get("deal");
-				BigDecimal discountedPrice = this.createDiscountedPrice(productPrice, discount);
-				if(discountedPrice != null) {
-					persistableProductPrice.setDiscountedPrice(discountedPrice);
-				}
+			if(!StringUtils.isBlank((stringQuantity))) {
+				product.setQuantity(quantity);
 			}
 			
-			List<PersistableProductPrice> productPriceList = new ArrayList<PersistableProductPrice>();
-			productPriceList.add(persistableProductPrice);
+			if(record.isSet("average_rating")) {
+				String averageRatingString = record.get("average_rating");
+				product.setRating(Double.parseDouble(averageRatingString));
+				
+			}
 			
-			product.setProductPrices(productPriceList);
+			if(record.isSet("reviews_count")) {
+				String averageRatingString = record.get("reviews_count");
+				product.setRatingCount(Integer.parseInt(averageRatingString));
+				
+			}
+
+			if(productPrice != null) {
+				PersistableProductPrice persistableProductPrice = new PersistableProductPrice();
+				persistableProductPrice.setDefaultPrice(true);
+				persistableProductPrice.setPrice(productPrice);
+				
+				//apply a discunted price
+				if(record.isSet("deal")) {
+					String discount = record.get("deal");
+					BigDecimal discountedPrice = this.createDiscountedPrice(productPrice, discount);
+					if(discountedPrice != null) {
+						persistableProductPrice.setDiscountedPrice(discountedPrice);
+					}
+				}
+				
+				List<PersistableProductPrice> productPriceList = new ArrayList<PersistableProductPrice>();
+				productPriceList.add(persistableProductPrice);
+			}
+			
+			if(variant != null) {
+				product.getVariants().add(variant);
+			}
 
 			List<ProductDescription> descriptions = new ArrayList<ProductDescription>();
 
@@ -355,8 +415,6 @@ public class ProductImport {
 			System.out.println("Line " + i + " ********************");
 			System.out.println(json);
 
-			
-			
 
 			//post to create category v0 API web service
 
@@ -518,7 +576,6 @@ public class ProductImport {
         		fis.close();
         	}
         }
-		
 
 	}
 	
@@ -572,6 +629,68 @@ public class ProductImport {
 	
 	private String alternativeIdentifier(CSVRecord record) {
 		return record.get("sku");
+	}
+	
+	
+	/**
+	 * flavour of the day inventory is a ProductVariant since xls is defined with a product and a default variant (color)
+	 * @return
+	 */
+	private PersistableProductVariant variant(String str) {
+		
+		PersistableProductVariant variant = new PersistableProductVariant();
+		variant.setProductShipeable(true);
+		variant.setAvailable(true);
+		variant.setDefaultSelection(true);
+		PersistableProductInventory inventory = new PersistableProductInventory();
+		
+		PersistableProductPrice price = new PersistableProductPrice();
+		inventory.setPrice(price);
+		
+		variant.setInventory(inventory);
+		
+		//csv contains shu;quantity;price;variant;discounted
+		StringTokenizer st = new StringTokenizer(str, ";");
+		int count = 1;
+		while (st.hasMoreTokens()) {
+			String inv = st.nextToken();
+			//int tokenCount = st.countTokens();
+			//if(tokenCount < 3) {
+			//	System.out.println("Expecting 4 tokens (;) sku;quantity;prica;variant-code;discount");
+			//	continue;
+			//}
+
+			switch(count) {
+			
+			
+			case 1:
+				variant.setSku(inv);
+				break;
+			case 2:
+				inventory.setQuantity(Integer.parseInt(inv));
+				break;
+			case 3:
+				price.setDefaultPrice(true);
+				price.setPrice(new BigDecimal(inv));
+				break;
+				
+			case 4:
+				variant.setVariationCode(inv);
+				break;
+				
+			case 5:
+				price.setDiscounted(true);
+				price.setDiscountedPrice(new BigDecimal(inv));
+				break;
+			
+			}
+			
+			count ++;
+			
+		}
+		
+		return variant;
+		
 	}
 
 }
