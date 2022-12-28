@@ -79,6 +79,10 @@ public class ProductImport {
 	 */
 	
 	/**
+	 * TODO add product id to csv
+	 */
+	
+	/**
 	 * For Shopizer 3.2.3 +
 	 */
 	
@@ -93,16 +97,17 @@ public class ProductImport {
 	private String endPoint = "http://localhost:8080/api/v2/private/product/inventory?store=";
 	
 	private static final String MERCHANT = "DEFAULT";
-	private boolean DRY_RUN = true;
+	private boolean DRY_RUN = false;
 	
-	private final int MAX_COUNT = 10;
+	private final int MAX_COUNT = 25000;
 	
 	
 	
 	/**
 	 * Where to find images
 	 */
-	private String IMAGE_BASE_DIR = "/Users/carlsamson/Documents/csti/projects-proposals/bam/BAM-excel/";
+	private String IMAGE_BASE_DIR = "/Users/carlsamson/Documents/csti/shopizer/doc/images/ecomm/";
+	
 	
 	/**
 	 * where to find csv							
@@ -314,12 +319,12 @@ public class ProductImport {
 			}
 			
 			/** images **/
-			if(record.isSet("image_name")) {
-				String image = record.get("image_name");
+			if(record.isSet("image")) {
+				String image = record.get("image");
 				if(!StringUtils.isBlank(image)) {
 					
 					StringBuilder imageName = new StringBuilder();
-					imageName.append(IMAGE_BASE_DIR).append(image.trim()).append(".jpg");//TODO remove
+					imageName.append(IMAGE_BASE_DIR).append(image.trim());
 					
 					File imgPath = new File(imageName.toString());
 					
@@ -328,7 +333,9 @@ public class ProductImport {
 						PersistableImage persistableImage = new PersistableImage();
 	
 						persistableImage.setBytes(bytes);
-						persistableImage.setName(imgPath.getName());
+						
+						String imgName = image.replaceAll("/", "-").trim();
+						persistableImage.setName(imgName);
 			
 						List<PersistableImage> images = new ArrayList<PersistableImage>();
 						images.add(persistableImage);
