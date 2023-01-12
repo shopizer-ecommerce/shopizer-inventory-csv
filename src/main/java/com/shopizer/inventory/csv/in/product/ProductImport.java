@@ -24,8 +24,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.StringUtils;
-import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.map.ObjectWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -94,7 +93,8 @@ public class ProductImport {
 	
 	private HttpHeaders httpHeader;
 	
-	private String endPoint = "http://localhost:8080/api/v2/private/product/inventory?store=";
+	private String endPoint = "https://demo-api.shopizer.com/api/v2/private/product/inventory?store=";
+
 	
 	private static final String MERCHANT = "DEFAULT";
 	private boolean DRY_RUN = false;
@@ -319,6 +319,7 @@ public class ProductImport {
 			}
 			
 			/** images **/
+			List<PersistableImage> images = new ArrayList<PersistableImage>();
 			if(record.isSet("image")) {
 				String image = record.get("image");
 				if(!StringUtils.isBlank(image)) {
@@ -337,10 +338,9 @@ public class ProductImport {
 						String imgName = image.replaceAll("/", "-").trim();
 						persistableImage.setName(imgName);
 			
-						List<PersistableImage> images = new ArrayList<PersistableImage>();
+						
 						images.add(persistableImage);
 							
-						product.setImages(images);
 					}
 				}
 			}
@@ -416,11 +416,18 @@ public class ProductImport {
 
 			product.setDescriptions(descriptions);
 
-			ObjectWriter writer = new ObjectMapper().writer().withDefaultPrettyPrinter();
-			String json = writer.writeValueAsString(product);
+			ObjectMapper objectMapper = new ObjectMapper();
+			
+
+			String json = objectMapper.writeValueAsString(product);
 			
 			System.out.println("Line " + i + " ********************");
 			System.out.println(json);
+			
+			product.setImages(images);
+			json = objectMapper.writeValueAsString(product);
+			
+
 
 
 			//post to create category v0 API web service
@@ -462,7 +469,7 @@ public class ProductImport {
 		//MediaType.APPLICATION_JSON //for application/json
 		headers.setContentType(mediaType);
 		//Basic Authentication
-		String authorisation = "admin@shopizer.com" + ":" + "password";
+		String authorisation = "admin@shopizer.com" + ":" + "password!";
 		byte[] encodedAuthorisation = Base64.encode(authorisation.getBytes());
 		headers.add("Authorization", "Basic " + new String(encodedAuthorisation));
 		return headers;

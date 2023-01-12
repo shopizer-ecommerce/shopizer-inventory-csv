@@ -1,15 +1,7 @@
 package com.shopizer.inventory.csv.in.product;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
-import org.apache.commons.csv.CSVRecord;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -18,12 +10,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.codec.Base64;
 import org.springframework.web.client.RestTemplate;
 
-public class DeleteProductImport {
+
+/**
+ * Delete products from a list of ids
+ * @author carlsamson
+ *
+ */
+public class DeleteProduct {
 	
 	
 	public static void main(String[] args) {
 		
-		DeleteProductImport deleteImport = new DeleteProductImport();
+		DeleteProduct deleteImport = new DeleteProduct();
 		try {
 			deleteImport.deleteProducts();
 		} catch (Exception e) {
@@ -31,19 +29,16 @@ public class DeleteProductImport {
 			e.printStackTrace();
 		}
 	}
-	
-	private String langs[] = {"en"};
-	
+
 	private HttpHeaders httpHeader;
 	
-	private String endPoint = "http://localhost:8080/api/v1/private/product";
-	
-	private String FILE_NAME = "/Users/carlsamson/Documents/dev/mydidas.csv";
-	
+	private String endPoint = "https://demo-api.shopizer.com/api/v1/private/product";
+
 	private static final String MERCHANT = "DEFAULT";
 	private boolean DRY_RUN = false;
 	
-	private final int MAX_COUNT = 25000;
+	private final int START_COUNT = 93;
+	private final int MAX_COUNT = 121;
 	
 	
 	public void deleteProducts() throws Exception {
@@ -51,52 +46,25 @@ public class DeleteProductImport {
 		
 		
 		RestTemplate restTemplate = new RestTemplate();
-		
-		CSVFormat format = CSVFormat.EXCEL.withHeader().withDelimiter(',');
-
-		BufferedReader in = new BufferedReader(
-				   new InputStreamReader(
-		                      new FileInputStream(FILE_NAME), StandardCharsets.UTF_8));
-		
-		@SuppressWarnings("resource")
-		CSVParser parser = new CSVParser(in,format);
 
 		
 		HttpHeaders httpHeader = getHeader();
 
-		int i = 0;
 		int count = 0;
-		for(CSVRecord record : parser){
+		for(int i = START_COUNT; i <= MAX_COUNT + START_COUNT; i = i+ 2){
 
-			String code = record.get("product_id");
-
-			if(StringUtils.isBlank(code)) {
-				throw new Exception("No skus");
-			} 
 			
+			
+			System.out.println("Line " + count + " ******************** " + i);
+		
 			if(!DRY_RUN) {
-
-				//ResponseEntity<String> response
-				//  = restTemplate.getForEntity(endPoint + "/" + code, String.class, httpHeader);
-				
-				ResponseEntity<Void> response = restTemplate.exchange(endPoint + "/" + code, HttpMethod.DELETE, new HttpEntity<>(Void.class, httpHeader), Void.class); 
-				
-				///Assertions.assertEquals(response.getStatusCode(), HttpStatus.OK);
-				
-				
-				//HttpEntity<String> entity = new HttpEntity<String>(json, httpHeader);
-				//ResponseEntity response = restTemplate.get
-				//		.postForEntity(endPoint + MERCHANT, entity, Void.class);
+				ResponseEntity<Void> response = restTemplate.exchange(endPoint + "/" + i, HttpMethod.DELETE, new HttpEntity<>(Void.class, httpHeader), Void.class); 
 				int statusCode = response.getStatusCodeValue();
 				System.out.println("Status code " + statusCode);
 			}
-
 			
-			System.out.println("Line " + i + " ******************** " + code);
 
-
-
-			i++;//rows
+			//i++;//rows
 			count++;
 
 		}

@@ -13,8 +13,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.StringUtils;
-import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.map.ObjectWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -106,9 +105,10 @@ public class ManufacturerImport {
 			
 			descriptions.add(description);
 			manufacturer.setDescriptions(descriptions);
+
 			
-			ObjectWriter writer = new ObjectMapper().writer().withDefaultPrettyPrinter();
-			String json = writer.writeValueAsString(manufacturer);
+			ObjectMapper objectMapper = new ObjectMapper();
+			String json = objectMapper.writeValueAsString(manufacturer);
 			
 			System.out.println(json);
 			
