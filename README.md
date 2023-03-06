@@ -1,4 +1,4 @@
-# shopizer-inventory-xml
+# shopizer-inventory
 
 Build Shopizer
 
